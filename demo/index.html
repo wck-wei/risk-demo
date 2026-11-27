@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="用授信、分期下单和定价案例，交互式地了解风控决策过程。">
+  <title>风控决策演示</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./cases.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">◈</span> 风控决策演示</div>
+      <span class="data-label">使用模拟数据</span>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="intro" aria-labelledby="page-title">
+      <h1 id="page-title">一笔申请，如何做出决策？</h1>
+      <p>选择一个业务案例，跟着流程看系统查了什么、为什么放行，以及遇到异常时如何处理。</p>
+    </section>
+
+    <div class="dashboard">
+      <aside class="card setup" aria-labelledby="setup-heading">
+        <h2 id="setup-heading">选择演示案例</h2>
+        <div class="scene-options" role="group" aria-label="业务场景">
+          <button type="button" data-scene="credit" aria-pressed="true">授信</button>
+          <button type="button" data-scene="order" aria-pressed="false">下单</button>
+          <button type="button" data-scene="pricing" aria-pressed="false">定价</button>
+        </div>
+        <label for="case">案例</label>
+        <select id="case"></select>
+        <div class="case-summary">
+          <p id="case-story"></p>
+          <dl id="case-facts" class="facts"></dl>
+        </div>
+        <button type="button" id="play" class="primary"><span aria-hidden="true" id="play-icon">▶</span> <span id="play-text">播放流程</span></button>
+        <div class="step-controls">
+          <button type="button" id="previous">上一步</button>
+          <button type="button" id="next">下一步</button>
+          <button type="button" id="reset">重置</button>
+        </div>
+        <noscript><p>此演示需要浏览器启用 JavaScript。</p></noscript>
+      </aside>
+
+      <section class="card flow-card" aria-labelledby="flow-heading">
+        <div class="card-title">
+          <div><h2 id="flow-heading">决策流程</h2><p>点击模块可查看它的职责与处理记录。</p></div>
+          <span id="flow-count" class="count"></span>
+        </div>
+        <div class="diagram" id="diagram" role="group" aria-label="风控入口连接决策引擎，决策引擎分别连接特征服务与模型服务">
+          <button type="button" class="module entry" data-module="risk" aria-pressed="true">
+            <span class="module-icon" aria-hidden="true">◎</span>
+            <span><strong>风控入口</strong><small>接收申请 · 返回结果</small></span>
+          </button>
+          <div class="wire intake" aria-hidden="true"></div>
+          <button type="button" class="module engine" data-module="engine" aria-pressed="false">
+            <span class="module-icon" aria-hidden="true">◇</span>
+            <span><strong>决策引擎</strong><small>安排检查 · 汇总决策</small></span>
+          </button>
+          <div class="branch" aria-hidden="true"><i class="wire to-feature"></i><i class="wire to-model"></i></div>
+          <div class="services">
+            <button type="button" class="module features" data-module="feature" aria-pressed="false">
+              <span class="module-icon" aria-hidden="true">▤</span>
+              <span><strong>特征服务</strong><small>提供风险相关数据</small></span>
+            </button>
+            <button type="button" class="module model" data-module="model" aria-pressed="false">
+              <span class="module-icon" aria-hidden="true">◫</span>
+              <span><strong>模型服务</strong><small>评估风险 · 给出建议</small></span>
+            </button>
+          </div>
+        </div>
+        <div id="detail" class="detail" aria-live="polite" aria-atomic="true">
+          <p id="detail-module" class="detail-module"></p>
+          <h3 id="detail-title"></h3>
+          <p id="detail-text"></p>
+          <ul id="detail-facts" class="detail-facts"></ul>
+        </div>
+      </section>
+
+      <section class="card result-card" aria-labelledby="result-heading">
+        <h2 id="result-heading">业务结果</h2>
+        <div id="result" class="result" aria-live="polite" aria-atomic="true">
+          <p id="result-title" class="result-title"></p>
+          <p id="result-text"></p>
+          <dl id="result-facts" class="facts"></dl>
+          <ul id="result-reasons"></ul>
+        </div>
+      </section>
+
+      <section class="card timeline-card" aria-labelledby="timeline-heading">
+        <div class="card-title">
+          <div><h2 id="timeline-heading">操作记录</h2><p>点击已播放的步骤，可回看当时的处理。</p></div>
+        </div>
+        <ol id="timeline" class="timeline"></ol>
+      </section>
+    </div>
+    <footer>演示案例来自项目的模拟决策引擎。演示 APR（年化总成本指标）按最终年利率加 1.2 个百分点计算。</footer>
+  </main>
+</body>
+</html>

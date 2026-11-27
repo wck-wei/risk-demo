@@ -7,6 +7,7 @@ from .contracts import EngineRequest, Fault, Trace, matches_type
 from .engine import Engine
 from .features import FeatureService
 from .model import ModelService
+from .platforms import MagicCube, MetadataPlatform, RCMS
 
 FEATURE_FAULTS = {"missing-once", "missing-always", "stale"}
 FAULTS = FEATURE_FAULTS | {"none", "feature-timeout", "model-timeout", "version"}
@@ -70,16 +71,18 @@ def normalize(request, config, trace_id):
     context = {key: request[key] for key in sorted(CONTEXT_FIELDS) if key in request}
     context["amount"] = amounts[0]
     entity_keys = {key: request[key] for key in entity_fields}
-    return EngineRequest(trace_id, scene_id, scene["strategy_id"], context, entity_keys, timestamp, timeout)
+    return EngineRequest(trace_id, scene_id, context, entity_keys, timestamp, timeout)
 
 
 class RiskService:
     def __init__(self, config=None):
         self.config = config if config is not None else Configuration.load()
-        self.engine = Engine(
-            self.config, FeatureService(self.config.features, self.config.fixtures),
-            ModelService(self.config.models, self.config.scenes, self.config.features),
-        )
+        self.rcms = RCMS(self.config)
+        self.metadata = MetadataPlatform(self.config.metadata, self.config.features)
+        self.feature_service = FeatureService(self.metadata, self.config.fixtures)
+        self.predictor = ModelService(self.config.models, self.config.scenes, self.config.features)
+        self.magic_cube = MagicCube(self.config, self.predictor)
+        self.engine = Engine(self.config, self.feature_service, self.magic_cube)
 
     def decide(self, request, *, fault=Fault()):
         supplied_trace = request.get("trace_id") if isinstance(request, dict) else None
@@ -98,7 +101,10 @@ class RiskService:
                                                component_trace=trace.events), **output)
         trace = Trace(trace_id, normalized.timeout_ms)
         trace.add("risk.received", scene=normalized.scene, timeout_ms=normalized.timeout_ms)
-        engine = self.engine.decide(normalized, trace, fault)
+        flow = self.rcms.flow(normalized.scene)
+        trace.add("rcms.route", strategy_id=flow.strategy_id, flow_version=flow.version,
+                  stages=[stage for stage, rules in flow.stages if rules])
+        engine = self.engine.decide(normalized, trace, fault, flow)
         trace.add("risk.response", decision=engine.decision, code="OK")
         output.update(engine.output)
         if engine.model_result and engine.model_result.status == "OK":
@@ -106,7 +112,7 @@ class RiskService:
         return dict(code="OK", message="决策完成", decision=engine.decision,
                     trace_id=trace_id, reason_codes=engine.reason_codes, **output,
                     component_results=dict(
-                        engine=dict(strategy_id=normalized.strategy_id, decision=engine.decision,
+                        engine=dict(strategy_id=flow.strategy_id, flow_version=flow.version, decision=engine.decision,
                                     hit_rules=engine.hit_rules, next_action=engine.next_action),
                         features=asdict(engine.feature_snapshot),
                         model=asdict(engine.model_result) if engine.model_result else None,

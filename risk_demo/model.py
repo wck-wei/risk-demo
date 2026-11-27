@@ -7,8 +7,8 @@ class ModelService:
         self.scenes = scenes
         self.feature_sets = feature_sets
 
-    def predict(self, request: ModelRequest, fault: Fault) -> ModelResult:
-        config = self.models[request.model_code]
+    def predict(self, request: ModelRequest, fault: Fault, *, model_config=None) -> ModelResult:
+        config = self.models[request.model_code] if model_config is None else model_config
         threshold = request.threshold_profile["threshold"]
         expected_version = config["feature_version"]
         latency = config["latency_ms"]
@@ -45,6 +45,8 @@ class ModelService:
         result.probability = result.score if fraud else round(1 - result.score, 6)
         result.risk_level = "LOW" if good else "HIGH"
         result.decision_hint = config["good"] if good else config["bad"]
+        if not good:
+            result.reason_code = config["reason"]
         if config["kind"] == "pricing":
             result.risk_premium = config["low_premium"] if good else config["high_premium"]
             result.suggested_rate = round(request.business_context["base_rate"] + result.risk_premium, 6)

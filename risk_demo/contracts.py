@@ -19,7 +19,6 @@ def matches_type(value: Any, kind: str) -> bool:
 class EngineRequest:
     trace_id: str
     scene: str
-    strategy_id: str
     business_context: dict
     entity_keys: dict[str, str]
     as_of: datetime
@@ -67,8 +66,8 @@ class ModelRequest:
 @dataclass
 class ModelResult:
     status: str
-    threshold: float
-    model_version: str
+    threshold: float | None
+    model_version: str | None
     feature_version_used: str
     latency_ms: int
     score: float | None = None
@@ -78,6 +77,7 @@ class ModelResult:
     missing_features: list[str] = field(default_factory=list)
     risk_premium: float | None = None
     suggested_rate: float | None = None
+    reason_code: str | None = None
 
 
 @dataclass

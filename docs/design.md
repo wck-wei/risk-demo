@@ -2,65 +2,50 @@
 
 ## 需求目标
 
-| 编号 | 从原文提炼的目标 | 验收结果 |
+| 编号 | 目标 | 验收结果 |
 | --- | --- | --- |
-| R1 | 用 Python 复现风控入口、引擎、特征、模型四层交互 | 进程内调用，可通过命令行和 Python API 运行。引擎统一编排，模型仅消费特征向量 |
-| R2 | 用配置描述场景、特征、规则和模型 | 四类 JSON 配置可独立查阅。修改阈值即可改变对应决策，引用错误在加载时报告 |
-| R3 | 复现授信、下单、定价样例 | 分别得到 PASS（30000、12 期）、ALLOW（4999、免验证）、PRICE_OK（利率 15%、APR 16.2%） |
-| R4 | 展示高风险、缺失、超时、版本错误和参数错误 | 有确定的故障触发方式、业务动作与原因码。补取至多一次 |
-| R5 | 用统一契约追踪调用链 | trace_id 贯穿成功、拒绝和降级请求。可查看规则命中、模型结果、特征来源、版本、缺失及耗时 |
-| R6 | 交付可复验的演示 | 附样例、测试方案、自动化测试、验证记录和启动说明。Python 3.11+ 标准库即可运行 |
+| R1 | 复现风控入口、引擎、特征和模型的在线交互 | RCMS 提供规则流，元信息平台提供数据口径，Magic Cube 管理模型版本并提供在线推理接口 |
+| R2 | 将运行规则和依赖配置化 | 场景、阶段、规则、元信息、特征定义、模型及合成数据可以独立调整。错误引用在启动时报告 |
+| R3 | 复现授信、下单和定价 | 授信通过（30,000、12 期）、下单放行（4,999、免验证）、定价完成（15%、演示 APR 16.2%） |
+| R4 | 展示分支和异常 | 覆盖反洗钱复核、反欺诈验证、硬规则拦截、缺失回补、超时、版本冲突、接口不可用和参数错误 |
+| R5 | 用统一契约追踪调用链 | trace_id 贯穿发布版本选择、规则、特征消费方与路由、模型版本及最终决定 |
+| R6 | 交付可复验的演示 | Python 3.11+ 标准库即可运行。浏览器端可离线播放案例，并以中文解读业务结果 |
 
-原文是设计参考。本次交付包含可运行源码。客户、设备、商户、额度和模型参数均为演示数据。订单放行金额是建议占用额度，本项目范围为同步模拟决策。
+项目范围为同步模拟决策和内存中的模型发布、合成订单上报。订单放行金额是建议占用额度。利率和 APR 是演示业务口径。
 
-## 接口与调用关系
-
-```mermaid
-flowchart LR
-    Caller[CLI 或 Python 调用方] --> Risk[风控入口]
-    Risk --> Engine[引擎]
-    Engine --> Features[特征服务]
-    Engine --> Model[模型服务]
-```
+## 接口与数据契约
 
 | 接口 | 请求 | 响应 |
 | --- | --- | --- |
-| 风控 | scene、request_id、customer_id、product_code、amount 或场景金额别名、term_months、场景实体键。可选 trace_id、request_time、timeout_ms 和场景业务参数 | code、message、decision、approved_amount、approved_term、final_rate、apr、need_verify、risk_level、reason_codes、trace_id、component_results |
-| 引擎 | trace_id、scene、strategy_id、business_context、entity_keys、timeout_ms | decision、reason_codes、hit_rules、model_result、feature_snapshot、component_trace、next_action、output |
-| 特征 | trace_id、scene、entity_keys、feature_set_id、feature_names、required_flags、as_of、timeout_ms，以及显式配置为请求来源的业务字段 | feature_values、feature_meta、missing_features、feature_version、ttl、latency_ms、status |
-| 模型 | trace_id、scene、model_code、model_version、feature_version_used、feature_vector、feature_meta、business_context、threshold_profile、timeout_ms | score、probability、risk_level、threshold、decision_hint、missing_features、model_version、feature_version_used、latency_ms、status |
+| 风控入口 | scene、request_id、customer_id、product_code、amount 或场景金额别名、term_months、场景实体键。可选 trace_id、request_time、timeout_ms 及场景上下文 | code、message、decision、approved_amount、approved_term、final_rate、apr、need_verify、risk_level、reason_codes、trace_id、component_results |
+| RCMS | 业务场景 | 已发布规则流的编号、版本、阶段与规则 |
+| 引擎 | trace_id、场景、实体键、业务上下文、as_of、超时预算及 RCMS 规则流 | 决定、命中规则、特征快照、模型结果、后续动作和调用轨迹 |
+| 特征网关 | trace_id、场景、实体键、特征集、特征列表、as_of、剩余预算及已配置的请求取数项 | 特征值、来源、域、路由、版本、计算时间、TTL、缺项和耗时 |
+| Magic Cube 在线服务 | 模型编码、实体键、场景、业务上下文以及本次决策的取数和预算上下文 | 推理状态、模型及特征版本、分值、概率、阈值、建议和缺项 |
 
-入口将金额归一为正数，校验别名一致性，校验正整数期数、比例及超时预算。授信需 apply_id 和 device_id，下单需 order_id、device_id 和 merchant_id，定价需 pricing_id、application_id 和 base_rate。客户、申请、订单、设备等 ID 只作为实体键，业务上下文使用显式白名单。无时区的 request_time 按 UTC 处理，省略则取 UTC 当前时间。CLI 对 JSON 对象返回标准风控响应，业务拒绝或降级退出码为 0，参数错误为 2。
+入口校验非空标识、有限正金额、别名一致性、正整数期数和预算、有效比例及时间。授信需要 apply_id 和 device_id，下单需要 order_id、device_id 和 merchant_id，定价需要 pricing_id、application_id 和 base_rate。无时区的 request_time 按 UTC 处理，省略则取 UTC 当前时间。CLI 的业务决策退出码为 0，参数错误为 2，配置错误为 1。
 
-## 特征、规则与模型编排
+## 执行顺序
 
-1. 引擎按场景配置批量获取特征。可用额度来自 Mock 客户快照，下单请求中的 available_credit 只作输入校验。期限和竞品利率由已配置的请求来源提供。模拟快照时间为 as_of 前 60 秒，默认 TTL 为 300 秒。缺失、错误类型或过期在元数据中可追溯。
-2. 引擎对非关键特征应用配置默认值，并保留原始缺失原因。规则只读取当次上下文。引擎先校验快照版本，随后按配置顺序收集所有可执行的规则命中，决策取第一个硬规则命中。若关键规则依赖缺失且无硬规则命中，直接按场景降级。
-3. 引擎只传给模型配置要求的特征及对应元数据。模型校验类型和版本。模型报告缺项时，引擎只补取这些项一次，更新快照，复查规则及依赖，再按同一预算重试模型。持续缺失或回补超时都产生可解释降级。
-4. 模型使用配置的线性计算和阈值，结果限制在 0 到 1 内。授信高分通过，低分转人工。下单低欺诈概率放行，达到阈值时验证。定价根据模拟溢价和配置上下限计算，低风险定价允许匹配报价区间内、比拟定利率最多低 0.5 个百分点的有效竞品价。匹配只使用未默认的竞品价，追加 COMPETITOR_RATE_MATCHED。APR 采用演示公式 `final_rate + 0.012`，两个字段均以小数比例表示。
-5. 同一请求使用一个模拟预算。特征批取、补取各耗 5 ms，模型调用耗 8 ms。超时消耗剩余预算，演示故障注入也使用该机制。耗时是逻辑时间，演示无需真实等待。响应内保留有序事件，CLI 启用 --audit 时将事件写入 stderr，决策 JSON 写入 stdout。
+1. 风控入口选择 RCMS 已发布规则流。引擎根据规则引用批量查询需要的特征，包括定价所需的竞品价。特征网关依据元信息按业务域分发，并把数值和缺项合并返回。订单可用额度取自客户快照。窗口订单金额使用请求时间向前计算。
+2. 引擎校验特征版本，按配置阶段顺序检查规则。同一阶段收集可执行的命中，取第一条命中的动作。该阶段命中即结束规则流，关键数据缺失且无命中时走备用流程。默认依次执行反洗钱、业务规则和反欺诈阶段。
+3. 规则通过后，引擎调用 Magic Cube。在线服务固定本次活动模型版本，并自行查询推理所需特征。弱依赖缺失时采用配置默认值并保留缺失原因。模型需要的强依赖缺失时，Magic Cube 只补取缺项一次，随后再次评估。
+4. 引擎根据规则、模型建议或备用流程形成决定。授信高分通过，低分复核。下单达到欺诈概率阈值时验证。定价公式为基础年利率加模拟溢价，再按上下限截断。低风险可在允许价差范围内匹配有效竞品报价。演示 APR 为最终年利率加 1.2 个百分点。
+5. 一次决策共享模拟预算。特征批取或补取默认消耗 5 ms，推理默认消耗 8 ms。若预算不足，超时耗尽剩余预算。标准完整路径通常为 18 ms，一次成功补取路径为 31 ms。启用 `--audit` 时，CLI 将事件输出到 stderr，最终决策 JSON 写到 stdout。
 
-## 决策与降级
+## 降级与输出
 
-| 触发条件 | 授信 | 下单 | 定价 | 原因码 |
-| --- | --- | --- | --- | --- |
-| 硬规则命中 | REJECT | 依规则 REJECT 或 CHALLENGE | 依规则配置 | 规则对应原因码 |
-| 模型不满足通过条件 | REVIEW | CHALLENGE | PRICE_OK，按溢价与价格区间计算 | CREDIT_SCORE_BELOW_THRESHOLD / ORDER_MODEL_CHALLENGE / 定价原因 |
-| 特征超时且缺少必要数据 | REVIEW | CHALLENGE | REVIEW | FEATURE_TIMEOUT_FALLBACK |
-| 缺少规则依赖 | REVIEW | CHALLENGE | REVIEW | FEATURE_MISSING |
-| 模型报告缺项且补取后仍无法预测 | REVIEW | CHALLENGE | REVIEW | MODEL_MISSING_FEATURE |
-| 特征版本不匹配 | REVIEW | CHALLENGE | REVIEW | FEATURE_VERSION_MISMATCH |
-| 模型超时 | REVIEW | CHALLENGE，保留规则结果和验证要求 | REVIEW | MODEL_TIMEOUT_REVIEW / MODEL_TIMEOUT_RULE_ONLY |
-| 入口校验失败 | INVALID | INVALID | INVALID | PARAM_INVALID |
+| 触发条件 | 动作 | 示例原因码 |
+| --- | --- | --- |
+| 命中反洗钱规则 | 转人工核验 | AML_MANUAL_REVIEW |
+| 命中反欺诈规则 | 按阶段配置拒绝或验证 | FRAUD_DEVICE_VERIFY |
+| 特征超时、规则缺项、版本不匹配 | 授信或定价复核，下单验证 | FEATURE_TIMEOUT_FALLBACK、FEATURE_MISSING、FEATURE_VERSION_MISMATCH |
+| 模型补取后仍然缺项 | 授信或定价复核，下单验证 | MODEL_MISSING_FEATURE |
+| 模型接口不可用或超时 | 授信或定价复核，下单验证 | MODEL_UNAVAILABLE、MODEL_TIMEOUT_REVIEW、MODEL_TIMEOUT_RULE_ONLY |
+| 入口参数无效 | 返回参数错误 | PARAM_INVALID |
 
-有默认值的特征缺失时允许继续推理，并保留 FEATURE_MISSING 与来源标记。补取成功仍保留 MODEL_MISSING_FEATURE，表示链路发生过恢复。业务字段仅在相应动作下赋值。风险等级来自成功的模型预测。CHALLENGE 的 need_verify 为 true，ALLOW 为 false，其他场景为 null。
+已恢复的特征缺项保留诊断原因。批准额度只在授信通过或下单放行时返回，定价字段只在成功报价时返回，已完成推理时可返回模拟风险等级。
 
-## 演示配置
+## 演示与配置
 
-场景配置绑定策略、特征集、模型、规则与输出语义。特征配置声明来源、类型、关键性、版本和 TTL。模型配置声明版本、输入、线性权重和阈值。规则配置使用有限的比较操作与求和操作，规则按列表顺序执行。CLI 的故障注入独立于业务请求，覆盖首次缺失、持续缺失、过期、版本不匹配和超时。
-
-## HTML 演示层
-
-浏览器端按审计事件的顺序回放四个模块的交互。模块高亮、箭头路径和说明取自当前事件，最终业务结果取自同一笔请求的风控响应。界面把模块事件、原因码、百分比和期限转成中文业务说明，决策和阈值继续由 Python 引擎统一计算。
-
-`demo/generate_cases.py` 将样例请求与选定的异常条件送入 RiskService，生成可直接由浏览器载入的 `demo/cases.js`。页面离线回放这些执行记录。修改引擎、配置或案例后重新生成数据，并使用 `--check` 确认页面的案例数据与引擎一致。
+浏览器按 Python 审计事件回放四个在线模块与三个发布平台。配置职责和规则分支用中文说明，最终业务决定来自同一笔请求的风控响应。修改引擎、配置或案例后运行 `python3 demo/generate_cases.py`。平台具体配置、生命周期与上报示例见[三平台与在线决策](platforms.md)。

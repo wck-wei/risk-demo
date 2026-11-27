@@ -6,11 +6,11 @@
       "multi_loan_cnt": 2,
       "income_level": 4,
       "age": 32,
-      "order_amt_7d": 6200,
       "repay_capacity_score": 0.85,
       "available_credit": 30000,
       "utilization_rate": 0.35,
-      "ltv_score": 0.8
+      "ltv_score": 0.8,
+      "watchlist_for_review": 0
     },
     "CUST2002": {
       "cust_risk_prob": 0.85,
@@ -18,19 +18,33 @@
       "multi_loan_cnt": 6,
       "income_level": 1,
       "age": 40,
-      "order_amt_7d": 19000,
       "repay_capacity_score": 0.25,
       "available_credit": 2500,
       "utilization_rate": 0.9,
-      "ltv_score": 0.3
+      "ltv_score": 0.3,
+      "watchlist_for_review": 0
+    },
+    "CUST3003": {
+      "cust_risk_prob": 0.12,
+      "overdue_30d_cnt": 0,
+      "multi_loan_cnt": 2,
+      "income_level": 4,
+      "age": 32,
+      "repay_capacity_score": 0.85,
+      "available_credit": 30000,
+      "utilization_rate": 0.35,
+      "ltv_score": 0.8,
+      "watchlist_for_review": 1
     }
   },
   "device": {
     "DEV-A": {
-      "device_risk_score": 0.1
+      "device_risk_score": 0.1,
+      "device_verification_signal": 0
     },
     "DEV-B": {
-      "device_risk_score": 0.75
+      "device_risk_score": 0.75,
+      "device_verification_signal": 1
     }
   },
   "merchant": {
@@ -40,5 +54,28 @@
     "M200": {
       "merchant_risk_level": 3
     }
+  },
+  "order_events": {
+    "CUST1001": [
+      {
+        "age_days": 2,
+        "amount": 2500
+      },
+      {
+        "age_days": 5,
+        "amount": 3700
+      },
+      {
+        "age_days": 9,
+        "amount": 1000
+      }
+    ],
+    "CUST2002": [
+      {
+        "age_days": 1,
+        "amount": 19000
+      }
+    ],
+    "CUST3003": []
   }
 }

@@ -1,6 +1,14 @@
 {
   "CREDIT_STD_V1": [
     {
+      "id": "AML_MANUAL_REVIEW",
+      "stage": "AML",
+      "op": "ge",
+      "left": "feature.watchlist_for_review",
+      "right": 1,
+      "action": "REVIEW"
+    },
+    {
       "id": "CREDIT_AGE_OUT_OF_RANGE",
       "op": "outside",
       "left": "feature.age",
@@ -8,44 +16,58 @@
         18,
         60
       ],
-      "action": "REJECT"
+      "action": "REJECT",
+      "stage": "BUSINESS"
     },
     {
       "id": "CREDIT_OVERDUE",
       "op": "gt",
       "left": "feature.overdue_30d_cnt",
       "right": 0,
-      "action": "REJECT"
+      "action": "REJECT",
+      "stage": "BUSINESS"
     },
     {
       "id": "CREDIT_MULTI_LOAN",
       "op": "gt",
       "left": "feature.multi_loan_cnt",
       "right": 3,
-      "action": "REJECT"
+      "action": "REJECT",
+      "stage": "BUSINESS"
     },
     {
       "id": "CREDIT_DEVICE_RISK",
       "op": "ge",
       "left": "feature.device_risk_score",
       "right": 0.3,
-      "action": "REJECT"
+      "action": "REJECT",
+      "stage": "FRAUD"
     }
   ],
   "ORDER_RISK_V1": [
+    {
+      "id": "AML_MANUAL_REVIEW",
+      "stage": "AML",
+      "op": "ge",
+      "left": "feature.watchlist_for_review",
+      "right": 1,
+      "action": "REVIEW"
+    },
     {
       "id": "ORDER_INSUFFICIENT_CREDIT",
       "op": "gt",
       "left": "request.amount",
       "right": "feature.available_credit",
-      "action": "REJECT"
+      "action": "REJECT",
+      "stage": "BUSINESS"
     },
     {
       "id": "ORDER_MERCHANT_RISK",
       "op": "gt",
       "left": "feature.merchant_risk_level",
       "right": 2,
-      "action": "REJECT"
+      "action": "REJECT",
+      "stage": "BUSINESS"
     },
     {
       "id": "ORDER_SEVEN_DAY_LIMIT",
@@ -55,8 +77,26 @@
         "request.amount"
       ],
       "right": 20000,
+      "action": "CHALLENGE",
+      "stage": "BUSINESS"
+    },
+    {
+      "id": "FRAUD_DEVICE_VERIFY",
+      "stage": "FRAUD",
+      "op": "ge",
+      "left": "feature.device_verification_signal",
+      "right": 1,
       "action": "CHALLENGE"
     }
   ],
-  "PRICING_STD_V1": []
+  "PRICING_STD_V1": [
+    {
+      "id": "AML_MANUAL_REVIEW",
+      "stage": "AML",
+      "op": "ge",
+      "left": "feature.watchlist_for_review",
+      "right": 1,
+      "action": "REVIEW"
+    }
+  ]
 }

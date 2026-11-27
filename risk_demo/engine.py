@@ -2,7 +2,8 @@ from decimal import Decimal
 from operator import ge, gt
 
 from .configuration import NEXT_ACTION, feature_operands
-from .contracts import EngineRequest, EngineResult, Fault, FeatureRequest, ModelRequest, Trace
+from .contracts import EngineRequest, EngineResult, Fault, Trace
+from .features import FeatureSession
 
 OPERATORS = {"gt": gt, "ge": ge, "outside": lambda value, bounds: not bounds[0] <= value <= bounds[1]}
 
@@ -33,42 +34,25 @@ def evaluate_rules(rules, features, context):
 
 
 class Engine:
-    def __init__(self, config, feature_service, model_service):
+    def __init__(self, config, feature_service, magic_cube):
         self.config = config
         self.feature_service = feature_service
-        self.model_service = model_service
+        self.magic_cube = magic_cube
 
-    def decide(self, request: EngineRequest, trace: Trace, fault: Fault) -> EngineResult:
+    def decide(self, request: EngineRequest, trace: Trace, fault: Fault, flow) -> EngineResult:
         scene = self.config.scenes[request.scene]
-        feature_set = self.config.features[scene["feature_set_id"]]
-        model_config = self.config.models[scene["model_code"]]
-        rules = self.config.rules[request.strategy_id]
-        trace.add("engine.strategy", strategy_id=request.strategy_id, feature_set_id=scene["feature_set_id"],
-                  model_code=scene["model_code"])
-        reasons, hits = [], []
+        session = FeatureSession(self.feature_service, request, scene["feature_set_id"], trace, fault)
+        feature_names = set(flow.engine_features)
+        for _, rules in flow.stages:
+            for rule in rules:
+                feature_names.update(feature_operands(rule["left"]))
+                feature_names.update(feature_operands(rule["right"]))
+        engine_features = tuple(name for name in session.config["features"] if name in feature_names)
+        trace.add("engine.strategy", strategy_id=flow.strategy_id, flow_version=flow.version,
+                  feature_set_id=scene["feature_set_id"], model_code=scene["model_code"])
+        snapshot = session.snapshot
+        hits = []
         model = None
-
-        def get_features(names, *, retry=False):
-            specs = feature_set["features"]
-            feature_request = FeatureRequest(
-                request.trace_id, request.scene, request.entity_keys, scene["feature_set_id"], tuple(names),
-                {name: specs[name]["critical"] for name in names}, request.as_of, trace.remaining,
-                {name: request.business_context[name] for name in names
-                 if specs[name]["source"] == "request" and name in request.business_context},
-            )
-            result = self.feature_service.batch_get(feature_request, fault, retry=retry)
-            defaulted = []
-            for name in result.missing_features:
-                if not specs[name]["critical"]:
-                    result.feature_values[name] = specs[name]["default"]
-                    result.feature_meta[name].update(defaulted=True, default_source="feature_config")
-                    defaulted.append(name)
-            if defaulted:
-                reasons.append("FEATURE_TIMEOUT_FALLBACK" if result.status == "TIMEOUT" else "FEATURE_MISSING")
-            trace.add("feature.retry" if retry else "feature.batch_get", result.latency_ms,
-                      status=result.status, names=list(names), missing_features=result.missing_features,
-                      defaulted=defaulted, feature_version=result.feature_version)
-            return result
 
         def finish(decision, *extra_reasons):
             context = request.business_context
@@ -90,74 +74,40 @@ class Engine:
                         extra_reasons += ("COMPETITOR_RATE_MATCHED",)
                 values.update(final_rate=float(rate), apr=float(rate + Decimal(str(pricing["apr_addon"]))))
             output = {field: values.get(field) for field in scene["output"].get(decision, [])}
-            reason_codes = list(dict.fromkeys([*reasons, *extra_reasons]))
+            reason_codes = list(dict.fromkeys([*session.reasons, *extra_reasons]))
             trace.add("engine.decision", decision=decision, reason_codes=reason_codes)
             return EngineResult(decision, reason_codes, hits, model, snapshot, trace.events,
                                 NEXT_ACTION[decision], output)
 
-        def check_rules():
-            nonlocal hits
+        if engine_features:
+            batch = session.fetch(engine_features, consumer="engine")
+            if batch.status == "TIMEOUT":
+                return finish(scene["fallback"], "FEATURE_TIMEOUT_FALLBACK")
+            if batch.feature_version != session.config["version"]:
+                snapshot.status = "FEATURE_VERSION_MISMATCH"
+                return finish(scene["fallback"], "FEATURE_VERSION_MISMATCH")
+        for stage, rules in flow.stages:
+            if not rules:
+                continue
             hits, blocked = evaluate_rules(rules, snapshot.feature_values, request.business_context)
-            trace.add("engine.rules", hit_rules=[hit["rule_id"] for hit in hits], missing_features=blocked)
+            trace.add("engine.rules", stage=stage, hit_rules=[hit["rule_id"] for hit in hits],
+                      missing_features=blocked)
             if hits:
                 return finish(hits[0]["action"], *(hit["rule_id"] for hit in hits))
             if blocked:
                 return finish(scene["fallback"], "FEATURE_MISSING")
-            return None
 
-        def predict():
-            names = model_config["weights"]
-            model_request = ModelRequest(
-                request.trace_id, request.scene, scene["model_code"], model_config["version"],
-                snapshot.feature_version,
-                {name: snapshot.feature_values[name] for name in names if name in snapshot.feature_values},
-                {name: snapshot.feature_meta[name] for name in names},
-                request.business_context, {"threshold": model_config["threshold"]}, trace.remaining,
-            )
-            result = self.model_service.predict(model_request, fault)
-            trace.add("model.predict", result.latency_ms, status=result.status, model_version=result.model_version,
-                      feature_version_used=result.feature_version_used, missing_features=result.missing_features,
-                      decision_hint=result.decision_hint, score=result.score)
-            return result
-
-        snapshot = get_features(tuple(feature_set["features"]))
-        timed_out = snapshot.status == "TIMEOUT"
-        if timed_out and any(feature_set["features"][name]["critical"] for name in snapshot.missing_features):
-            return finish(scene["fallback"], "FEATURE_TIMEOUT_FALLBACK")
-        if snapshot.feature_version != model_config["feature_version"]:
-            snapshot.status = "FEATURE_VERSION_MISMATCH"
-            return finish(scene["fallback"], "FEATURE_VERSION_MISMATCH")
-        rule_result = check_rules()
-        if rule_result:
-            return rule_result
-        model = predict()
-        if model.status == "MISSING_FEATURES":
-            reasons.append("MODEL_MISSING_FEATURE")
-            retry = get_features(tuple(model.missing_features), retry=True)
-            for name in retry.feature_meta:
-                snapshot.feature_values.pop(name, None)
-            snapshot.feature_values.update(retry.feature_values)
-            snapshot.feature_meta.update(retry.feature_meta)
-            snapshot.missing_features = [name for name, meta in snapshot.feature_meta.items() if meta["missing"]]
-            snapshot.latency_ms += retry.latency_ms
-            if retry.status == "TIMEOUT":
-                snapshot.status = "TIMEOUT"
-                return finish(scene["fallback"], "FEATURE_TIMEOUT_FALLBACK")
-            if retry.feature_version != snapshot.feature_version:
-                snapshot.status = "FEATURE_VERSION_MISMATCH"
-                return finish(scene["fallback"], "FEATURE_VERSION_MISMATCH")
-            rule_result = check_rules()
-            if rule_result:
-                return rule_result
-            model = predict()
+        model = self.magic_cube.predict(scene["model_code"], request, session, trace, fault)
         if model.status == "TIMEOUT":
             return finish(scene["fallback"], scene["model_timeout_reason"])
+        if model.status == "FEATURE_TIMEOUT":
+            return finish(scene["fallback"], "FEATURE_TIMEOUT_FALLBACK")
         if model.status == "MISSING_FEATURES":
             return finish(scene["fallback"], "MODEL_MISSING_FEATURE")
         if model.status != "OK":
             return finish(scene["fallback"], model.status)
         if model.decision_hint == "PRICE_OK":
             return finish("PRICE_OK", f"{model.risk_level}_RISK_PREMIUM")
-        if model.decision_hint == model_config["bad"]:
-            return finish(model.decision_hint, model_config["reason"])
+        if model.reason_code:
+            return finish(model.decision_hint, model.reason_code)
         return finish(model.decision_hint)

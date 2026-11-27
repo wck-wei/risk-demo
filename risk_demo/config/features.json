@@ -33,6 +33,11 @@
         "source": "customer",
         "type": "integer",
         "critical": true
+      },
+      "watchlist_for_review": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
       }
     }
   },
@@ -47,9 +52,11 @@
         "critical": true
       },
       "order_amt_7d": {
-        "source": "customer",
+        "source": "order_events",
         "type": "number",
-        "critical": true
+        "critical": true,
+        "aggregation": "sum_amount",
+        "window_days": 7
       },
       "device_risk_score": {
         "source": "device",
@@ -70,6 +77,16 @@
       "available_credit": {
         "source": "customer",
         "type": "number",
+        "critical": true
+      },
+      "watchlist_for_review": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
+      },
+      "device_verification_signal": {
+        "source": "device",
+        "type": "integer",
         "critical": true
       }
     }
@@ -107,6 +124,11 @@
       },
       "term_months": {
         "source": "request",
+        "type": "integer",
+        "critical": true
+      },
+      "watchlist_for_review": {
+        "source": "customer",
         "type": "integer",
         "critical": true
       }

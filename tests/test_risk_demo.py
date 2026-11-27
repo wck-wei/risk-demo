@@ -66,8 +66,8 @@ class RiskDemoTests(unittest.TestCase):
     def test_t04_risky_customers(self):
         credit = self.service.decide(sample("credit", customer_id="CUST2002", device_id="DEV-B"))
         self.assertEqual(credit["decision"], "REJECT")
-        self.assertEqual(credit["reason_codes"], ["CREDIT_OVERDUE", "CREDIT_MULTI_LOAN", "CREDIT_DEVICE_RISK"])
-        self.assertEqual(len(components(credit)["engine"]["hit_rules"]), 3)
+        self.assertEqual(credit["reason_codes"], ["CREDIT_OVERDUE", "CREDIT_MULTI_LOAN"])
+        self.assertEqual(len(components(credit)["engine"]["hit_rules"]), 2)
         order = self.service.decide(sample("order", customer_id="CUST2002", merchant_id="M200"))
         self.assertEqual(order["decision"], "REJECT")
         self.assertEqual(order["reason_codes"],
@@ -149,11 +149,14 @@ class RiskDemoTests(unittest.TestCase):
     def test_t09_chain_contract_and_audit(self):
         engine = self.service.engine
         with patch.object(engine.feature_service, "batch_get", wraps=engine.feature_service.batch_get) as features:
-            with patch.object(engine.model_service, "predict", wraps=engine.model_service.predict) as model:
+            with patch.object(self.service.predictor, "predict", wraps=self.service.predictor.predict) as model:
                 result = self.service.decide(sample("credit", trace_id="TRACE-T09", age=90))
-        features.assert_called_once()
+        self.assertEqual(features.call_count, 2)
         model.assert_called_once()
-        feature_request = features.call_args.args[0]
+        feature_request, model_feature_request = [call.args[0] for call in features.call_args_list]
+        self.assertNotIn("income_level", feature_request.feature_names)
+        self.assertIn("income_level", model_feature_request.feature_names)
+        self.assertEqual(model_feature_request.as_of, feature_request.as_of)
         model_request = model.call_args.args[0]
         self.assertEqual(feature_request.trace_id, model_request.trace_id)
         self.assertEqual(model_request.trace_id, "TRACE-T09")
@@ -164,12 +167,13 @@ class RiskDemoTests(unittest.TestCase):
         self.assertTrue({"id_hash", "phone_hash", "age"}.isdisjoint(model_request.business_context))
         self.assertEqual(components(result)["features"]["feature_values"]["age"], 32)
         self.assertEqual([event["event"] for event in events(result)],
-                         ["risk.received", "engine.strategy", "feature.batch_get", "engine.rules",
+                         ["risk.received", "rcms.route", "engine.strategy", "feature.batch_get", "engine.rules",
+                          "engine.rules", "engine.rules", "model.gateway", "feature.batch_get",
                           "model.predict", "engine.decision", "risk.response"])
-        self.assertEqual([event["sequence"] for event in events(result)], list(range(1, 8)))
+        self.assertEqual([event["sequence"] for event in events(result)], list(range(1, 13)))
         self.assertEqual({event["trace_id"] for event in events(result)}, {"TRACE-T09"})
-        self.assertEqual(events(result)[-1]["elapsed_ms"], 13)
-        self.assertEqual(model_request.timeout_ms, 95)
+        self.assertEqual(events(result)[-1]["elapsed_ms"], 18)
+        self.assertEqual(model_request.timeout_ms, 90)
         self.assertEqual(feature_request.as_of.isoformat(), "2026-06-01T10:00:00+00:00")
 
     def test_t10_missing_model_feature_recovers(self):
@@ -181,8 +185,8 @@ class RiskDemoTests(unittest.TestCase):
         snapshot = components(result)["features"]
         self.assertEqual(snapshot["feature_values"]["income_level"], 4)
         self.assertEqual(snapshot["missing_features"], [])
-        self.assertEqual(snapshot["latency_ms"], 10)
-        self.assertEqual(events(result)[-1]["elapsed_ms"], 26)
+        self.assertEqual(snapshot["latency_ms"], 15)
+        self.assertEqual(events(result)[-1]["elapsed_ms"], 31)
 
     def test_t11_missing_model_feature_persists(self):
         result = self.service.decide(sample("credit"), fault=Fault("missing-always", "income_level"))
@@ -218,11 +222,11 @@ class RiskDemoTests(unittest.TestCase):
         forced = self.service.decide(sample("order"), fault=Fault("feature-timeout"))
         self.assertEqual(forced["decision"], "CHALLENGE")
         self.assertEqual(components(forced)["features"]["status"], "TIMEOUT")
-        retry = self.service.decide(sample("credit", timeout_ms=14), fault=Fault("missing-once", "income_level"))
+        retry = self.service.decide(sample("credit", timeout_ms=19), fault=Fault("missing-once", "income_level"))
         self.assertEqual(retry["decision"], "REVIEW")
         self.assertEqual(retry["reason_codes"], ["MODEL_MISSING_FEATURE", "FEATURE_TIMEOUT_FALLBACK"])
         self.assertEqual(events(retry, "feature.retry")[0]["latency_ms"], 1)
-        self.assertEqual(events(retry)[-1]["elapsed_ms"], 14)
+        self.assertEqual(events(retry)[-1]["elapsed_ms"], 19)
 
     def test_t14_model_timeout_by_scene(self):
         for name, decision, reason in [
@@ -253,7 +257,7 @@ class RiskDemoTests(unittest.TestCase):
                                {name: {"version": "FS_V1.0"} for name in
                                 ("income_level", "cust_risk_prob", "device_risk_score")},
                                {}, {"threshold": 0.65}, 10)
-        model = self.service.engine.model_service
+        model = self.service.predictor
         self.assertEqual(model.predict(request, Fault()).status, "INVALID_FEATURE_TYPE")
         wrong_meta = {**request.feature_meta, "income_level": {"version": "FS_WRONG"}}
         self.assertEqual(model.predict(replace(request, feature_meta=wrong_meta), Fault()).status,
@@ -315,7 +319,7 @@ class RiskDemoTests(unittest.TestCase):
             result = future.result()
             self.assertEqual({event["trace_id"] for event in events(result)}, {f"T18-{index}"})
             self.assertEqual(result["decision"], "REVIEW" if index % 2 else "PASS")
-            self.assertEqual(events(result)[-1]["elapsed_ms"], 26 if index % 2 else 13)
+            self.assertEqual(events(result)[-1]["elapsed_ms"], 31 if index % 2 else 18)
             self.assertEqual(len(events(result, "feature.retry")), index % 2)
 
     def test_t19_unknown_entities_and_request_sourced_features(self):

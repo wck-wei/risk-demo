@@ -17,7 +17,14 @@
         "approved_amount",
         "approved_term"
       ]
-    }
+    },
+    "flow_version": "RCMS_1.0",
+    "rule_stages": [
+      "AML",
+      "BUSINESS",
+      "FRAUD"
+    ],
+    "engine_features": []
   },
   "ORDER_LOAN": {
     "strategy_id": "ORDER_RISK_V1",
@@ -41,7 +48,14 @@
       "CHALLENGE": [
         "need_verify"
       ]
-    }
+    },
+    "flow_version": "RCMS_1.0",
+    "rule_stages": [
+      "AML",
+      "BUSINESS",
+      "FRAUD"
+    ],
+    "engine_features": []
   },
   "PRICING": {
     "strategy_id": "PRICING_STD_V1",
@@ -65,6 +79,16 @@
       "cap": 0.24,
       "apr_addon": 0.012,
       "match_tolerance": 0.005
-    }
+    },
+    "flow_version": "RCMS_1.0",
+    "rule_stages": [
+      "AML",
+      "BUSINESS",
+      "FRAUD"
+    ],
+    "engine_features": [
+      "competitor_rate",
+      "term_months"
+    ]
   }
 }

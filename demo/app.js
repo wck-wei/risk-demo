@@ -8,16 +8,21 @@ const percent = new Intl.NumberFormat("zh-CN", { style: "percent", maximumFracti
 const modules = {
   risk: ["风控入口", "接收并检查业务申请。处理结束后，负责把决定交还业务方。"],
   engine: ["决策引擎", "安排数据查询、规则检查和模型评估，把各方结果合成一个业务决定。"],
-  feature: ["特征服务", "集中提供风险评估所需的数据，例如近期逾期情况、设备风险和可用额度。"],
-  model: ["模型服务", "根据引擎交来的数据评估风险或建议价格，再把结果交还引擎。"],
+  feature: ["特征网关", "按已发布的数据口径查询、计算并汇总风险特征，再返回给规则引擎或模型在线服务。"],
+  model: ["模型在线服务", "通过 Magic Cube 接收实体和业务上下文，自行到特征网关取所需数据。完成评估后将建议交给引擎。"],
+  rcms: ["RCMS", "配置并发布规则流，定义检查的先后顺序，以及命中时走拦截、验证还是复核。"],
+  metadata: ["元信息平台", "发布数据源结构和业务口径。特征网关据此分发请求，区分本地取值、快照读取和实时窗口计算。"],
+  registry: ["Magic Cube", "模型版本先注册并校验，部署后由在线接口提供服务。切换版本后，可重新部署仍保留的旧版本。"],
 };
 
 const eventNames = {
   "risk.received": "接收申请",
+  "rcms.route": "读取已发布规则流",
+  "model.gateway": "调用 Magic Cube 在线接口",
   "engine.strategy": "选择检查流程",
   "feature.batch_get": "批量查询数据",
   "engine.rules": "核对业务规则",
-  "model.predict": "获得模型评估",
+  "model.predict": "执行模型评估",
   "feature.retry": "补取缺失数据",
   "engine.decision": "汇总处理结果",
   "risk.response": "把结果返回业务方",
@@ -38,9 +43,14 @@ const featureNames = {
   ltv_score: "客户价值指标",
   competitor_rate: "竞品年利率",
   term_months: "还款期限",
+  watchlist_for_review: "名单复核信号",
+  device_verification_signal: "设备验证信号",
 };
 
 const reasons = {
+  AML_MANUAL_REVIEW: "合成名单出现待核验信号，转交人工复核。",
+  FRAUD_DEVICE_VERIFY: "演示设备风险信号触发二次验证。",
+  MODEL_UNAVAILABLE: "在线接口没有可用的模型版本，进入备用流程。",
   CREDIT_AGE_OUT_OF_RANGE: "年龄超出演示授信规则范围。",
   CREDIT_OVERDUE: "近 30 天有逾期记录。",
   CREDIT_MULTI_LOAN: "多头借贷数量超过演示上限。",
@@ -53,13 +63,22 @@ const reasons = {
   FEATURE_TIMEOUT_FALLBACK: "查询所需数据超时，按备用流程处理。",
   FEATURE_MISSING: "部分评估数据缺失、过期或不可用。",
   FEATURE_VERSION_MISMATCH: "数据版本与当前评估流程不匹配。",
-  MODEL_MISSING_FEATURE: "模型需要的数据一度缺失，引擎进行了补取。",
+  MODEL_MISSING_FEATURE: "模型需要的数据一度缺失，Magic Cube 发起了补取。",
   MODEL_TIMEOUT_RULE_ONLY: "规则检查已完成，模型超时，需要二次验证。",
   MODEL_TIMEOUT_REVIEW: "模型超时，交由人工复核。",
   LOW_RISK_PREMIUM: "按低风险档计算演示报价。",
   HIGH_RISK_PREMIUM: "按高风险档计算演示报价。",
   COMPETITOR_RATE_MATCHED: "竞品报价在允许匹配的区间内，已采用更低报价。",
 };
+
+const stageNames = { AML: "反洗钱筛查", BUSINESS: "业务规则", FRAUD: "反欺诈检查" };
+const routeNames = { LOCAL: "本地取值", TABLE: "快照读取", OUTER_API: "交给计算服务" };
+
+function eventLabel(event) {
+  if (event.event === "engine.rules") return stageNames[event.stage] || eventNames[event.event];
+  if (event.event === "feature.batch_get" && event.consumer === "magic_cube") return "模型查询所需数据";
+  return eventNames[event.event];
+}
 
 const verdicts = {
   PASS: ["授信通过", "符合授信规则和评分要求，可以按申请金额与期限提供授信。", "success"],
@@ -122,6 +141,9 @@ function explain(event) {
   switch (event.event) {
     case "risk.received":
       return ["业务提交申请", "入口检查资料是否齐全，并把申请交给决策引擎。", facts];
+    case "rcms.route":
+      return ["选择已发布规则流", "RCMS 提供本场景的检查顺序。命中需要处理的规则时，流程在当前步骤分流。",
+        [`发布版本 · ${event.flow_version}`, `执行顺序 · ${event.stages.map((stage) => stageNames[stage]).join(" → ")}`]];
     case "engine.strategy":
       return ["安排本次检查", "引擎根据业务类型确定需要查询的数据和执行的检查。", facts];
     case "feature.batch_get":
@@ -131,6 +153,8 @@ function explain(event) {
         return ["查询数据超时", "在允许的处理时间内未取到数据，引擎会按备用流程处理。", facts];
       }
       const values = response.component_results.features.feature_values;
+      const routeLabels = [...new Set(Object.values(event.routes).map((route) => routeNames[route]))];
+      if (routeLabels.length) facts.push(`取数方式 · ${routeLabels.join("、")}`);
       event.names.filter((name) => !event.missing_features.includes(name)).slice(0, 4)
         .forEach((name) => facts.push(friendlyFeature(name, values[name])));
       if (event.missing_features.length) {
@@ -140,28 +164,36 @@ function explain(event) {
         facts.push(`允许使用默认值 · ${event.defaulted.map((name) => friendlyFeature(name)).join("、")}`);
       }
       const title = retry ? (event.missing_features.length ? "补取后仍缺少数据" : "补取到所需数据") : "批量查询风险数据";
-      const message = retry ? "特征服务把本次回补结果交给引擎，供后续检查使用。"
-        : "引擎一次发出查询，特征服务把可用的数据和缺项一并返回。";
+      const message = retry ? "特征网关把回补结果交给 Magic Cube，供模型继续评估。"
+        : event.consumer === "magic_cube" ? "Magic Cube 根据模型需要发起批量查询，特征网关返回模型输入。"
+          : "引擎查询规则需要的数据。特征网关按元信息分发请求，并汇总各数据源结果。";
       return [title, message, facts];
     }
     case "engine.rules":
       if (event.hit_rules.length) {
-        return ["命中拦截规则", "引擎按照命中的规则处理这笔申请，流程跳过模型评估。",
+        return [`${stageNames[event.stage]}命中`, "引擎按照规则处理这笔申请，流程跳过模型评估。",
           event.hit_rules.map((rule) => reasons[rule] || "触发预设业务规则。")];
       }
       if (event.missing_features.length) {
         return ["规则无法完成", "引擎缺少执行规则所需的数据，改走备用流程。", facts];
       }
+      if (event.stage === "AML") return ["名单筛查完成", "本次未命中需要人工复核的合成名单信号。", facts];
+      if (event.stage === "FRAUD") return ["反欺诈检查完成", "本次未触发该阶段的设备风险规则。", facts];
       return ["业务规则检查完成",
-        { credit: "检查年龄、逾期、多头借贷和设备风险，本次未触发拦截。",
+        { credit: "检查年龄、逾期和多头借贷，本次未触发拦截。",
           order: "检查可用额度、商户风险和近 7 天的累计订单金额，本次未触发拦截。",
           pricing: "当前定价流程没有前置硬规则拦截，引擎将进入报价评估。" }[scene], facts];
+    case "model.gateway":
+      return ["访问 Magic Cube 在线接口",
+        event.model_version ? "在线接口选定当前部署版本，再向特征网关查询模型所需数据。"
+          : "当前没有部署中的模型，接口返回不可用。",
+        event.model_version ? [`在线版本 · ${event.model_version}`] : facts];
     case "model.predict": {
       if (event.status === "MISSING_FEATURES") {
         const missing = event.missing_features.map((name) => friendlyFeature(name)).join("、");
         const alreadyRetried = events.slice(0, event.sequence - 1).some((item) => item.event === "feature.retry");
         const message = alreadyRetried ? "已达到补取次数上限，引擎会转入备用流程。"
-          : "模型告知引擎缺少哪些数据，引擎将补取一次。";
+          : "评估发现数据不全，Magic Cube 会向特征网关补取一次。";
         return ["模型发现数据缺项", message, [`缺少 · ${missing}`]];
       }
       if (event.status === "TIMEOUT") {
@@ -182,7 +214,7 @@ function explain(event) {
           `模拟风险溢价 · ${percent.format(model.risk_premium)}`,
           `模型建议年利率 · ${percent.format(model.suggested_rate)}`);
       }
-      return ["模型返回评估建议", "模型根据引擎送来的数据完成评估，并把建议交回引擎。", facts];
+      return ["模型返回评估建议", "模型使用 Magic Cube 查询到的数据完成评估，并把建议交回引擎。", facts];
     }
     case "engine.decision":
       return ["引擎汇总决定", "引擎结合适用规则、模型或备用流程，形成供入口返回的业务结果。", facts];
@@ -196,18 +228,26 @@ function explain(event) {
 function renderDetail() {
   const relevant = events.slice(0, step + 1).findLast((event) => moduleFor(event) === selectedModule);
   const [moduleName, role] = modules[selectedModule];
-  const [title, explanation, facts] = relevant ? explain(relevant) : ["模块职责", role, []];
+  const platformFacts = {
+    rcms: [`当前发布版本 · ${demo.response.component_results.engine.flow_version}`],
+    metadata: [`当前发布版本 · ${demo.metadata_release}`, "数据源结构说明可用的原料，特征定义说明如何得到指标。"],
+    registry: ["注册 → 校验 → 部署 → 切换或下线"],
+  };
+  const [title, explanation, facts] = relevant ? explain(relevant)
+    : ["模块职责", role, platformFacts[selectedModule] || []];
   const routes = {
     "risk.received": "风控入口 → 决策引擎",
-    "feature.batch_get": "决策引擎 ↔ 特征服务",
-    "feature.retry": "决策引擎 ↔ 特征服务",
-    "model.predict": "决策引擎 ↔ 模型服务",
+    "rcms.route": "RCMS → 风控入口",
+    "feature.batch_get": relevant?.consumer === "magic_cube" ? "Magic Cube ↔ 特征网关" : "决策引擎 ↔ 特征网关",
+    "feature.retry": "Magic Cube ↔ 特征网关",
+    "model.gateway": "决策引擎 → Magic Cube",
+    "model.predict": "Magic Cube → 决策引擎",
     "risk.response": "决策引擎 → 风控入口 → 业务方",
   };
   $("#detail-module").textContent = routes[relevant?.event] || moduleName;
   $("#detail-title").textContent = title;
   $("#detail-text").textContent = explanation;
-  setList("#detail-facts", facts);
+  setList("#detail-facts", [...facts, ...(demo.platform_activity[selectedModule] || [])]);
 }
 
 function renderResult() {
@@ -246,6 +286,9 @@ function renderFlow() {
     button.setAttribute("aria-pressed", String(name === selectedModule));
   });
   $("#diagram").dataset.route = route;
+  $("#diagram").dataset.consumer = route === "feature" ? current().consumer : "";
+  $('[data-module="metadata"]').classList.toggle("current", active === "feature");
+  $('[data-module="registry"]').classList.toggle("current", current()?.event === "model.gateway");
   $(".intake").classList.toggle("active", active === "risk" || current()?.event === "engine.strategy");
   $("#flow-count").textContent = `${step + 1} / ${events.length} 步`;
   timelineButtons.forEach((button, index) => {
@@ -295,7 +338,7 @@ function loadCase() {
   setFacts("#case-facts", rows);
   const steps = events.map((event, index) => {
     const item = document.createElement("li");
-    const button = element("button", eventNames[event.event]);
+    const button = element("button", eventLabel(event));
     button.type = "button";
     button.addEventListener("click", () => {
       stop();

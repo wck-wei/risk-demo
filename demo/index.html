@@ -19,7 +19,7 @@
   <main class="shell">
     <section class="intro" aria-labelledby="page-title">
       <h1 id="page-title">一笔申请，如何做出决策？</h1>
-      <p>选择一个业务案例，跟着流程看系统查了什么、为什么放行，以及遇到异常时如何处理。</p>
+      <p>选一个业务案例，看看规则如何发布、数据从哪里来、模型如何参与决策。</p>
     </section>
 
     <div class="dashboard">
@@ -47,10 +47,21 @@
 
       <section class="card flow-card" aria-labelledby="flow-heading">
         <div class="card-title">
-          <div><h2 id="flow-heading">决策流程</h2><p>点击模块可查看它的职责与处理记录。</p></div>
+          <div><h2 id="flow-heading">决策流程</h2><p>点击平台或在线模块，查看配置职责与处理记录。</p></div>
           <span id="flow-count" class="count"></span>
         </div>
-        <div class="diagram" id="diagram" role="group" aria-label="风控入口连接决策引擎，决策引擎分别连接特征服务与模型服务">
+        <div class="platforms" role="group" aria-label="发布和管理平台">
+          <button type="button" class="platform" data-module="rcms" aria-pressed="false">
+            <strong>RCMS</strong><small>发布规则流</small>
+          </button>
+          <button type="button" class="platform" data-module="metadata" aria-pressed="false">
+            <strong>元信息平台</strong><small>发布数据口径</small>
+          </button>
+          <button type="button" class="platform" data-module="registry" aria-pressed="false">
+            <strong>Magic Cube</strong><small>管理模型版本</small>
+          </button>
+        </div>
+        <div class="diagram" id="diagram" role="group" aria-label="风控入口连接决策引擎，决策引擎分别连接特征网关与模型在线服务，模型在线服务也能查询特征网关">
           <button type="button" class="module entry" data-module="risk" aria-pressed="true">
             <span class="module-icon" aria-hidden="true">◎</span>
             <span><strong>风控入口</strong><small>接收申请 · 返回结果</small></span>
@@ -64,11 +75,11 @@
           <div class="services">
             <button type="button" class="module features" data-module="feature" aria-pressed="false">
               <span class="module-icon" aria-hidden="true">▤</span>
-              <span><strong>特征服务</strong><small>提供风险相关数据</small></span>
+              <span><strong>特征网关</strong><small>分发查询 · 汇总数据</small></span>
             </button>
             <button type="button" class="module model" data-module="model" aria-pressed="false">
               <span class="module-icon" aria-hidden="true">◫</span>
-              <span><strong>模型服务</strong><small>评估风险 · 给出建议</small></span>
+              <span><strong>模型在线服务</strong><small>自主取数 · 给出建议</small></span>
             </button>
           </div>
         </div>

@@ -1,0 +1,35 @@
+{
+  "release": "META_1.0",
+  "sources": {
+    "customer": {
+      "domain": "customer-risk",
+      "entity_key": "customer_id",
+      "route": "TABLE",
+      "label": "客户风险快照"
+    },
+    "device": {
+      "domain": "device-risk",
+      "entity_key": "device_id",
+      "route": "LOCAL",
+      "label": "设备评估数据"
+    },
+    "merchant": {
+      "domain": "merchant-risk",
+      "entity_key": "merchant_id",
+      "route": "TABLE",
+      "label": "商户档案"
+    },
+    "request": {
+      "domain": "business-request",
+      "entity_key": null,
+      "route": "LOCAL",
+      "label": "业务申请"
+    },
+    "order_events": {
+      "domain": "order-history",
+      "entity_key": "customer_id",
+      "route": "OUTER_API",
+      "label": "订单事件计算服务"
+    }
+  }
+}

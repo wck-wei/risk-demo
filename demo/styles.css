@@ -68,6 +68,12 @@ label { font-size: .875rem; font-weight: 700; }
 .step-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 7px; }
 .step-controls button:disabled { color: #72837e; }
 
+.platforms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.platform { min-width: 0; display: block; text-align: left; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: #f2f6f4; color: #21493e; }
+.platform strong, .platform small { display: block; overflow-wrap: anywhere; }
+.platform small { color: var(--muted); font-size: .875rem; margin-top: 3px; }
+.platform:hover, .platform[aria-pressed="true"], .platform.current { border-color: #20775f; background: #e0f3e8; }
+
 .diagram {
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(20px, .2fr) minmax(0, 1fr) minmax(28px, .3fr) minmax(0, 1fr);
   align-items: center; padding: 20px 15px; margin: 17px 0 15px; border-radius: 13px; border: 1px solid #e0ebe5;
@@ -81,7 +87,14 @@ label { font-size: .875rem; font-weight: 700; }
 .module:hover, .module[aria-pressed="true"] { border-color: #20775f; box-shadow: 0 0 0 2px #20775f2b; }
 .module.visited { background: #f1faf4; }
 .module.current { background: #d8f4e3; border-color: #22775e; box-shadow: 0 0 0 3px #22775e38; }
-.services { display: grid; gap: 18px; }
+.services { display: grid; gap: 18px; position: relative; }
+.diagram[data-consumer="magic_cube"] .services::after {
+  content: "↕"; position: absolute; top: 50%; left: 50%; translate: -50% -50%;
+  color: #137b5d; font-size: 1.15rem; font-weight: 700; line-height: 1;
+}
+.diagram[data-consumer="magic_cube"] .branch::before,
+.diagram[data-consumer="magic_cube"] .branch::after { border-color: var(--wire); }
+.diagram[data-consumer="magic_cube"] .to-feature { color: var(--wire); }
 .wire { color: var(--wire); border-top: 2px solid currentColor; position: relative; display: block; }
 .wire::after { content: ""; position: absolute; width: 6px; height: 6px; border-top: 2px solid currentColor; border-right: 2px solid currentColor; right: 2px; top: -5px; transform: rotate(45deg); }
 .wire.active, .diagram[data-route="feature"] .to-feature, .diagram[data-route="model"] .to-model { color: #137b5d; }
@@ -133,6 +146,7 @@ footer { margin: 22px 0 28px; color: var(--muted); font-size: .875rem; line-heig
   .services::before { content: ""; position: absolute; top: 0; left: 25%; right: 25%; height: 8px; border: 2px solid var(--wire); border-bottom: 0; }
   .diagram[data-route="feature"] .services::before { border-left-color: #137b5d; }
   .diagram[data-route="model"] .services::before { border-right-color: #137b5d; }
+  .diagram[data-consumer="magic_cube"] .services::after { content: "↔"; top: calc(50% + 4px); }
   .services .module { display: block; }
   .services .module-icon { margin-bottom: 4px; }
   .timeline { grid-template-columns: 1fr; }

@@ -1,0 +1,70 @@
+{
+  "CREDIT_APPLY": {
+    "strategy_id": "CREDIT_STD_V1",
+    "feature_set_id": "CREDIT_FS_V1",
+    "model_code": "CREDIT_SCORE_V1",
+    "entity_fields": [
+      "apply_id",
+      "device_id"
+    ],
+    "amount_aliases": [
+      "apply_amount"
+    ],
+    "fallback": "REVIEW",
+    "model_timeout_reason": "MODEL_TIMEOUT_REVIEW",
+    "output": {
+      "PASS": [
+        "approved_amount",
+        "approved_term"
+      ]
+    }
+  },
+  "ORDER_LOAN": {
+    "strategy_id": "ORDER_RISK_V1",
+    "feature_set_id": "ORDER_FS_V1",
+    "model_code": "ORDER_FRAUD_V1",
+    "entity_fields": [
+      "order_id",
+      "device_id",
+      "merchant_id"
+    ],
+    "amount_aliases": [
+      "order_amount"
+    ],
+    "fallback": "CHALLENGE",
+    "model_timeout_reason": "MODEL_TIMEOUT_RULE_ONLY",
+    "output": {
+      "ALLOW": [
+        "approved_amount",
+        "need_verify"
+      ],
+      "CHALLENGE": [
+        "need_verify"
+      ]
+    }
+  },
+  "PRICING": {
+    "strategy_id": "PRICING_STD_V1",
+    "feature_set_id": "PRICING_FS_V1",
+    "model_code": "PRICING_MODEL_V1",
+    "entity_fields": [
+      "pricing_id",
+      "application_id"
+    ],
+    "amount_aliases": [],
+    "fallback": "REVIEW",
+    "model_timeout_reason": "MODEL_TIMEOUT_REVIEW",
+    "output": {
+      "PRICE_OK": [
+        "final_rate",
+        "apr"
+      ]
+    },
+    "pricing": {
+      "floor": 0.08,
+      "cap": 0.24,
+      "apr_addon": 0.012,
+      "match_tolerance": 0.005
+    }
+  }
+}

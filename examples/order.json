@@ -1,0 +1,17 @@
+{
+  "customer_id": "CUST1001",
+  "request_time": "2026-06-01T10:00:00Z",
+  "channel": "APP",
+  "scene": "ORDER_LOAN",
+  "request_id": "REQ002",
+  "order_id": "ORD20260601001",
+  "product_code": "INSTALLMENT",
+  "order_amount": 4999,
+  "term_months": 6,
+  "device_id": "DEV-A",
+  "merchant_id": "M100",
+  "merchant_category": "3C",
+  "available_credit": 30000,
+  "coupon_amount": 100,
+  "pay_channel": "APPLE_PAY"
+}

@@ -1,0 +1,16 @@
+{
+  "customer_id": "CUST1001",
+  "request_time": "2026-06-01T10:00:00Z",
+  "channel": "APP",
+  "scene": "CREDIT_APPLY",
+  "request_id": "REQ001",
+  "apply_id": "CR20260601001",
+  "product_code": "CASH_LOAN",
+  "apply_amount": 30000,
+  "term_months": 12,
+  "device_id": "DEV-A",
+  "employment_type": "EMPLOYED",
+  "monthly_income": 15000,
+  "id_hash": "HID001",
+  "phone_hash": "HPH001"
+}

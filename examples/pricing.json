@@ -1,0 +1,16 @@
+{
+  "customer_id": "CUST1001",
+  "request_time": "2026-06-01T10:00:00Z",
+  "channel": "APP",
+  "scene": "PRICING",
+  "request_id": "REQ003",
+  "pricing_id": "PR20260601001",
+  "application_id": "CR20260601001",
+  "product_code": "CASH_LOAN",
+  "amount": 30000,
+  "term_months": 12,
+  "base_rate": 0.12,
+  "risk_level": "LOW",
+  "competitor_rate": 0.14,
+  "customer_segment": "STANDARD"
+}

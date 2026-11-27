@@ -1,0 +1,62 @@
+{
+  "CREDIT_STD_V1": [
+    {
+      "id": "CREDIT_AGE_OUT_OF_RANGE",
+      "op": "outside",
+      "left": "feature.age",
+      "right": [
+        18,
+        60
+      ],
+      "action": "REJECT"
+    },
+    {
+      "id": "CREDIT_OVERDUE",
+      "op": "gt",
+      "left": "feature.overdue_30d_cnt",
+      "right": 0,
+      "action": "REJECT"
+    },
+    {
+      "id": "CREDIT_MULTI_LOAN",
+      "op": "gt",
+      "left": "feature.multi_loan_cnt",
+      "right": 3,
+      "action": "REJECT"
+    },
+    {
+      "id": "CREDIT_DEVICE_RISK",
+      "op": "ge",
+      "left": "feature.device_risk_score",
+      "right": 0.3,
+      "action": "REJECT"
+    }
+  ],
+  "ORDER_RISK_V1": [
+    {
+      "id": "ORDER_INSUFFICIENT_CREDIT",
+      "op": "gt",
+      "left": "request.amount",
+      "right": "feature.available_credit",
+      "action": "REJECT"
+    },
+    {
+      "id": "ORDER_MERCHANT_RISK",
+      "op": "gt",
+      "left": "feature.merchant_risk_level",
+      "right": 2,
+      "action": "REJECT"
+    },
+    {
+      "id": "ORDER_SEVEN_DAY_LIMIT",
+      "op": "gt",
+      "left": [
+        "feature.order_amt_7d",
+        "request.amount"
+      ],
+      "right": 20000,
+      "action": "CHALLENGE"
+    }
+  ],
+  "PRICING_STD_V1": []
+}

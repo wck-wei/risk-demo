@@ -1,0 +1,53 @@
+{
+  "CREDIT_SCORE_V1": {
+    "kind": "credit",
+    "bias": 0.78,
+    "weights": {
+      "cust_risk_prob": -0.5,
+      "income_level": 0.03,
+      "device_risk_score": -0.2
+    },
+    "threshold": 0.65,
+    "good": "PASS",
+    "bad": "REVIEW",
+    "reason": "CREDIT_SCORE_BELOW_THRESHOLD",
+    "version": "1.0",
+    "feature_version": "FS_V1.0",
+    "latency_ms": 8
+  },
+  "ORDER_FRAUD_V1": {
+    "kind": "fraud",
+    "bias": 0.053,
+    "weights": {
+      "cust_risk_prob": 0.4,
+      "device_risk_score": 0.3,
+      "repay_capacity_score": -0.06
+    },
+    "threshold": 0.3,
+    "good": "ALLOW",
+    "bad": "CHALLENGE",
+    "reason": "ORDER_MODEL_CHALLENGE",
+    "version": "1.0",
+    "feature_version": "FS_V1.0",
+    "latency_ms": 8
+  },
+  "PRICING_MODEL_V1": {
+    "kind": "pricing",
+    "bias": 0.8,
+    "weights": {
+      "cust_risk_prob": -0.5,
+      "income_level": 0.02,
+      "utilization_rate": -0.2,
+      "ltv_score": 0.0375
+    },
+    "threshold": 0.65,
+    "good": "PRICE_OK",
+    "bad": "PRICE_OK",
+    "reason": null,
+    "version": "1.0",
+    "feature_version": "FS_V1.0",
+    "latency_ms": 8,
+    "low_premium": 0.03,
+    "high_premium": 0.08
+  }
+}

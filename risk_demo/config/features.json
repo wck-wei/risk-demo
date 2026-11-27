@@ -1,0 +1,115 @@
+{
+  "CREDIT_FS_V1": {
+    "version": "FS_V1.0",
+    "ttl": 300,
+    "latency_ms": 5,
+    "features": {
+      "cust_risk_prob": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      },
+      "overdue_30d_cnt": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
+      },
+      "multi_loan_cnt": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
+      },
+      "income_level": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
+      },
+      "device_risk_score": {
+        "source": "device",
+        "type": "number",
+        "critical": true
+      },
+      "age": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
+      }
+    }
+  },
+  "ORDER_FS_V1": {
+    "version": "FS_V1.0",
+    "ttl": 300,
+    "latency_ms": 5,
+    "features": {
+      "cust_risk_prob": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      },
+      "order_amt_7d": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      },
+      "device_risk_score": {
+        "source": "device",
+        "type": "number",
+        "critical": true
+      },
+      "merchant_risk_level": {
+        "source": "merchant",
+        "type": "integer",
+        "critical": true
+      },
+      "repay_capacity_score": {
+        "source": "customer",
+        "type": "number",
+        "critical": false,
+        "default": 0.5
+      },
+      "available_credit": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      }
+    }
+  },
+  "PRICING_FS_V1": {
+    "version": "FS_V1.0",
+    "ttl": 300,
+    "latency_ms": 5,
+    "features": {
+      "cust_risk_prob": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      },
+      "income_level": {
+        "source": "customer",
+        "type": "integer",
+        "critical": true
+      },
+      "utilization_rate": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      },
+      "ltv_score": {
+        "source": "customer",
+        "type": "number",
+        "critical": true
+      },
+      "competitor_rate": {
+        "source": "request",
+        "type": "number",
+        "critical": false,
+        "default": 0.14
+      },
+      "term_months": {
+        "source": "request",
+        "type": "integer",
+        "critical": true
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "customer": {
+    "CUST1001": {
+      "cust_risk_prob": 0.12,
+      "overdue_30d_cnt": 0,
+      "multi_loan_cnt": 2,
+      "income_level": 4,
+      "age": 32,
+      "order_amt_7d": 6200,
+      "repay_capacity_score": 0.85,
+      "available_credit": 30000,
+      "utilization_rate": 0.35,
+      "ltv_score": 0.8
+    },
+    "CUST2002": {
+      "cust_risk_prob": 0.85,
+      "overdue_30d_cnt": 2,
+      "multi_loan_cnt": 6,
+      "income_level": 1,
+      "age": 40,
+      "order_amt_7d": 19000,
+      "repay_capacity_score": 0.25,
+      "available_credit": 2500,
+      "utilization_rate": 0.9,
+      "ltv_score": 0.3
+    }
+  },
+  "device": {
+    "DEV-A": {
+      "device_risk_score": 0.1
+    },
+    "DEV-B": {
+      "device_risk_score": 0.75
+    }
+  },
+  "merchant": {
+    "M100": {
+      "merchant_risk_level": 1
+    },
+    "M200": {
+      "merchant_risk_level": 3
+    }
+  }
+}
